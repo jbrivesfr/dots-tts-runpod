@@ -1,4 +1,4 @@
-# dots.tts RunPod Serverless Worker
+# dots.tts RunPod Serverless — Load Balancer Endpoint
 # Built by GitHub Actions, deployed to RunPod Serverless
 #
 # GPU: RTX 3060+ (6GB+ VRAM)
@@ -15,16 +15,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install runpod worker SDK
-RUN pip install --no-cache-dir runpod
+# Install FastAPI server deps (for RunPod Load Balancer endpoint)
+RUN pip install --no-cache-dir fastapi uvicorn
 
 # Clone and install dots.tts
 RUN git clone https://github.com/rednote-hilab/dots.tts.git /app/dots-tts
 WORKDIR /app/dots-tts
 RUN pip install --no-cache-dir -e .
 
-# Copy worker and model downloader
-COPY handler.py /app/handler.py
+# Copy server and model downloader
+COPY server.py /app/server.py
 COPY download-model.sh /app/download-model.sh
 
 # Download model during build (cached in image)
@@ -38,5 +38,5 @@ WORKDIR /app
 ENV MODEL_DIR=/app/model
 ENV VOICES_DIR=/app/voices
 
-# RunPod Serverless entrypoint
-CMD ["python", "/app/handler.py"]
+# RunPod LB entrypoint — FastAPI on port 8000
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
