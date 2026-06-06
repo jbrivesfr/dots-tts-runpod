@@ -18,18 +18,40 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install PyTorch with CUDA 12.4 (no conda!)
+# Install PyTorch with CUDA (constraints version: 2.8.0)
 RUN pip3 install --no-cache-dir \
-    torch==2.6.0 torchaudio==2.6.0 \
-    --index-url https://download.pytorch.org/whl/cu124
+    torch==2.8.0 torchaudio==2.8.0 \
+    --index-url https://download.pytorch.org/whl/cu128
 
-# Install RunPod worker SDK + soundfile
-RUN pip3 install --no-cache-dir runpod soundfile
+# Install RunPod worker SDK
+RUN pip3 install --no-cache-dir runpod
 
-# Clone dots.tts and install deps
+# Clone dots.tts
 RUN git clone https://github.com/rednote-hilab/dots.tts.git /app/dots-tts
-RUN pip3 install --no-cache-dir -r /app/dots-tts/constraints/recommended.txt
-RUN pip3 install --no-cache-dir loguru
+
+# Install remaining constraints (skip torch/torchaudio already installed)
+RUN pip3 install --no-cache-dir \
+    transformers==4.57.0 \
+    huggingface-hub \
+    librosa==0.11.0 \
+    soundfile==0.13.1 \
+    numpy==2.2.6 \
+    pydantic==2.12.5 \
+    PyYAML==6.0.3 \
+    safetensors==0.8.0rc0 \
+    accelerate==1.12.0
+
+# Install deps NOT in constraints but required by dots.tts
+RUN pip3 install --no-cache-dir \
+    loguru \
+    langcodes \
+    gradio \
+    einops \
+    torchdiffeq \
+    tqdm \
+    lingua-language-detector \
+    WeTextProcessing
+
 # Symlink dots_tts into site-packages (pip install broken for this package)
 RUN ln -s /app/dots-tts/src/dots_tts /usr/local/lib/python3.10/dist-packages/dots_tts
 
