@@ -8,7 +8,7 @@
 
 FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
-# Python 3.10 + system deps
+# Python 3.10 + system deps (git needed for pip package metadata)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 python3-pip python3.10-dev \
     git curl ca-certificates ffmpeg \
@@ -26,10 +26,14 @@ RUN pip3 install --no-cache-dir \
 # Install RunPod worker SDK + soundfile
 RUN pip3 install --no-cache-dir runpod soundfile
 
-# Clone and install dots.tts (with constraints)
+# Clone dots.tts
 RUN git clone https://github.com/rednote-hilab/dots.tts.git /app/dots-tts
-WORKDIR /app/dots-tts
-RUN pip3 install --no-cache-dir . -c constraints/recommended.txt
+
+# Install deps from constraints (transformers 4.57 etc)
+RUN pip3 install --no-cache-dir -r /app/dots-tts/constraints/recommended.txt
+
+# Install dots.tts itself
+RUN pip3 install --no-cache-dir --no-deps /app/dots-tts
 
 # Verify transformers version
 RUN python3 -c "import transformers; print(f'✅ transformers=={transformers.__version__}')"
