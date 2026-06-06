@@ -30,9 +30,9 @@ COPY download-model.sh /app/download-model.sh
 # Download model during build (cached in image)
 RUN bash /app/download-model.sh || echo "⚠️ Model will download on first request"
 
-# Voices directory for voice cloning samples
+# Voices directory for voice cloning samples (optional)
 RUN mkdir -p /app/voices
-COPY voices/ /app/voices/ 2>/dev/null || echo "No pre-loaded voices"
+COPY voices/ /app/voices/
 
 WORKDIR /app
 ENV MODEL_DIR=/app/model
