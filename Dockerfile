@@ -16,12 +16,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install RunPod worker SDK + soundfile for WAV output
-RUN pip install --no-cache-dir runpod soundfile
+RUN pip install --no-cache-dir runpod soundfile "transformers>=4.51.0"
 
-# Clone and install dots.tts
+# Clone and install dots.tts (with pinned deps from constraints)
 RUN git clone https://github.com/rednote-hilab/dots.tts.git /app/dots-tts
 WORKDIR /app/dots-tts
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir -e . -c constraints/recommended.txt
 
 # Copy worker and model downloader
 COPY handler.py /app/handler.py
