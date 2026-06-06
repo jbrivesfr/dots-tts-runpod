@@ -1,0 +1,16 @@
+# Secrets
+runpod.md
+.env
+*.key
+
+# Voices (sample audio - private)
+voices/*.wav
+voices/*.txt
+!voices/README.txt
+
+# Python
+__pycache__/
+*.pyc
+
+# Docker
+*.tar
