@@ -1,4 +1,4 @@
-# dots.tts RunPod Serverless — Queue-Based Worker
+# dots.tts RunPod Serverless — Clean (no conda)
 # Built by GitHub Actions, deployed to RunPod Serverless
 #
 # GPU: RTX A4000+ (16GB+ VRAM)
@@ -6,36 +6,42 @@
 # Idle timeout: 120s
 # Execution timeout: 180s
 
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
-# System deps for dots.tts + ffmpeg for opus conversion
+# Python 3.10 + system deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 python3-pip python3.10-dev \
     git curl ca-certificates ffmpeg \
+    && ln -sf /usr/bin/python3.10 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.10 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install RunPod worker SDK + soundfile for WAV output
-RUN pip install --no-cache-dir runpod soundfile "transformers>=4.51.0"
+# Install PyTorch with CUDA 12.4 (no conda!)
+RUN pip3 install --no-cache-dir \
+    torch==2.6.0 torchaudio==2.6.0 \
+    --index-url https://download.pytorch.org/whl/cu124
 
-# Remove conda transformers, then install dots.tts with correct deps
-RUN pip uninstall -y transformers tokenizers 2>/dev/null; \
-    conda remove -y transformers tokenizers --force 2>/dev/null; \
-    true
+# Install RunPod worker SDK + soundfile
+RUN pip3 install --no-cache-dir runpod soundfile
+
+# Clone and install dots.tts (with constraints)
 RUN git clone https://github.com/rednote-hilab/dots.tts.git /app/dots-tts
 WORKDIR /app/dots-tts
-RUN pip install --no-cache-dir -e . -c constraints/recommended.txt
-# Force correct transformers version
-RUN python -c "import transformers; print(f'transformers: {transformers.__version__}')"
+RUN pip3 install --no-cache-dir -e . -c constraints/recommended.txt
+
+# Verify transformers version
+RUN python3 -c "import transformers; print(f'✅ transformers=={transformers.__version__}')"
 
 # Copy worker and model downloader
 COPY handler.py /app/handler.py
 COPY download-model.sh /app/download-model.sh
 
-# Download model during build (cached in image)
+# Download model during build
 RUN bash /app/download-model.sh || echo "⚠️ Model will download on first request"
 
-# Voices directory for voice cloning samples (optional)
+# Voices
 RUN mkdir -p /app/voices
 COPY voices/ /app/voices/
 
@@ -43,5 +49,5 @@ WORKDIR /app
 ENV MODEL_DIR=/app/model
 ENV VOICES_DIR=/app/voices
 
-# RunPod Queue-Based Serverless entrypoint
-CMD ["python", "/app/handler.py"]
+# RunPod entrypoint
+CMD ["python3", "/app/handler.py"]
