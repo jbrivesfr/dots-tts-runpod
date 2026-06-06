@@ -29,7 +29,7 @@ RUN pip3 install --no-cache-dir runpod soundfile
 # Clone and install dots.tts (with constraints)
 RUN git clone https://github.com/rednote-hilab/dots.tts.git /app/dots-tts
 WORKDIR /app/dots-tts
-RUN pip3 install --no-cache-dir -e . -c constraints/recommended.txt
+RUN pip3 install --no-cache-dir . -c constraints/recommended.txt
 
 # Verify transformers version
 RUN python3 -c "import transformers; print(f'✅ transformers=={transformers.__version__}')"
