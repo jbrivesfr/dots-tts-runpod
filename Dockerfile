@@ -65,10 +65,12 @@ COPY download-model.sh /app/download-model.sh
 # Download model during build
 RUN bash /app/download-model.sh || echo "⚠️ Model will download on first request"
 
-# Voices (downloaded at build time from public HTTPS — no secrets)
+# Voices (downloaded at build time from clubfasting.com — no secrets)
 RUN mkdir -p /app/voices && \
     curl -sS "https://clubfasting.com/jb-voice.wav" -o /app/voices/jb.wav && \
     curl -sS "https://clubfasting.com/jb-voice.txt" -o /app/voices/jb.txt && \
+    curl -sS "https://clubfasting.com/nina-voice.wav" -o /app/voices/nina.wav && \
+    curl -sS "https://clubfasting.com/nina-voice.txt" -o /app/voices/nina.txt && \
     echo "✅ Voices: $(ls /app/voices/)"
 
 WORKDIR /app
