@@ -25,9 +25,7 @@ logger = logging.getLogger("dots-tts-worker")
 # ── Config ──────────────────────────────────────────
 MODEL_DIR = Path(os.environ.get("MODEL_DIR", "/app/model"))
 VOICES_DIR = Path(os.environ.get("VOICES_DIR", "/app/voices"))
-FTP_HOST = os.environ.get("FTP_HOST", "lefasting.fr")
-FTP_USER = os.environ.get("FTP_USER", "")
-FTP_PASS = os.environ.get("FTP_PASS", "")
+VOICES_URL = os.environ.get("VOICES_URL", "https://clubfasting.com")
 
 # Check model status
 MODEL_READY = len(list(MODEL_DIR.glob("*.safetensors"))) > 0 or \
@@ -38,27 +36,22 @@ _model = None
 _model_info = None
 
 def ensure_voice(voice: str):
-    """Download voice sample from FTP if not already cached."""
+    """Download voice sample from VOICES_URL if not already cached."""
     wav_path = VOICES_DIR / f"{voice}.wav"
     txt_path = VOICES_DIR / f"{voice}.txt"
     
     if wav_path.exists() and txt_path.exists():
         return
     
-    if not FTP_USER or not FTP_PASS:
-        logger.warning(f"No FTP creds configured — voice cloning unavailable for '{voice}'")
-        return
-    
-    logger.info(f"Downloading voice '{voice}' from FTP...")
+    logger.info(f"Downloading voice '{voice}' from {VOICES_URL}...")
     import subprocess
-    ftp_base = f"ftp://{FTP_USER}:{FTP_PASS}@{FTP_HOST}"
     try:
         subprocess.run([
-            "curl", "-sS", f"{ftp_base}/{voice}-voice.wav",
+            "curl", "-sS", f"{VOICES_URL}/{voice}-voice.wav",
             "-o", str(wav_path)
         ], check=True, timeout=30)
         subprocess.run([
-            "curl", "-sS", f"{ftp_base}/{voice}-voice.txt",
+            "curl", "-sS", f"{VOICES_URL}/{voice}-voice.txt",
             "-o", str(txt_path)
         ], check=True, timeout=10)
         logger.info(f"Voice '{voice}' downloaded ({wav_path.stat().st_size} bytes)")
