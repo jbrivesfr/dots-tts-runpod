@@ -28,7 +28,7 @@ app = FastAPI(title="dots.tts API")
 # ── Config ──────────────────────────────────────────
 MODEL_DIR = Path(os.environ.get("MODEL_DIR", "/app/model"))
 VOICES_DIR = Path(os.environ.get("VOICES_DIR", "/app/voices"))
-DEFAULT_MODEL = "rednote-hilab/dots-tts-meanflow-distilled"
+DEFAULT_MODEL = "rednote-hilab/dots.tts-soar"
 
 # Check if model was pre-downloaded
 MODEL_READY = (MODEL_DIR / "pytorch_model.bin").exists() or \
@@ -42,26 +42,26 @@ if not MODEL_READY:
 _model = None
 _model_path = None
 
-def get_model():
-    """Lazy-load the dots.tts model."""
+def get_runtime():
+    """Lazy-load the dots.tts model runtime."""
     global _model, _model_path
     
     if _model is not None:
         return _model
     
-    logger.info("Loading dots.tts model...")
+    logger.info("Loading dots.tts model runtime...")
     start = time.time()
     
     try:
-        from dots_tts import DotsTTS
-        _model = DotsTTS.from_pretrained(
-            str(MODEL_DIR) if MODEL_READY else DEFAULT_MODEL,
-            device="cuda",
-            torch_dtype="float16"
+        from dots_tts.runtime import DotsTtsRuntime
+        model_path = str(MODEL_DIR) if MODEL_READY else DEFAULT_MODEL
+        _model = DotsTtsRuntime.from_pretrained(
+            model_path,
+            precision="float16",
         )
-    except ImportError:
-        # Fallback: use CLI via subprocess
-        logger.warning("dots.tts Python API unavailable — falling back to CLI")
+        logger.info(f"Model loaded from: {model_path}")
+    except ImportError as e:
+        logger.warning(f"dots.tts Python API unavailable: {e} — falling back to CLI")
         _model = "cli"
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
@@ -74,9 +74,10 @@ def get_model():
 
 class GenerateRequest(BaseModel):
     text: str
-    voice: Optional[str] = "default"  # "jb", "default", or null for random
+    voice: Optional[str] = "default"
     speed: Optional[float] = 1.0
-    format: Optional[str] = "wav"  # wav or opus
+    format: Optional[str] = "wav"
+    num_steps: Optional[int] = 10
 
 
 @app.get("/health")
@@ -110,38 +111,34 @@ def generate(req: GenerateRequest):
     logger.info(f"Generate: voice={voice}, text_len={len(text)}")
     start = time.time()
     
-    model = get_model()
+    runtime = get_runtime()
     
     # Prepare reference audio for voice cloning
-    ref_audio = None
-    ref_text = None
+    prompt_audio = None
+    prompt_text = None
     
     if voice != "default":
         ref_path = VOICES_DIR / f"{voice}.wav"
         ref_txt_path = VOICES_DIR / f"{voice}.txt"
         if ref_path.exists():
-            ref_audio = ref_path
+            prompt_audio = str(ref_path)
             if ref_txt_path.exists():
-                ref_text = ref_txt_path.read_text().strip()
+                prompt_text = ref_txt_path.read_text().strip()
             logger.info(f"Voice cloning: {voice} ({ref_path})")
         else:
             logger.warning(f"Voice '{voice}' not found, using default")
     
     try:
-        if model == "cli" or not MODEL_READY:
-            # Use CLI fallback
-            audio = generate_cli(text, ref_audio, ref_text)
+        if runtime == "cli" or not MODEL_READY:
+            audio = generate_cli(text, prompt_audio, prompt_text)
         else:
-            # Use Python API
-            audio = generate_api(model, text, ref_audio, ref_text)
+            audio = generate_api(runtime, text, prompt_audio, prompt_text)
     except Exception as e:
         logger.error(f"Generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
     elapsed = time.time() - start
-    duration = len(audio) / 48000  # 48 kHz
-    rtf = elapsed / duration if duration > 0 else 0
-    logger.info(f"Generated {len(audio)} samples ({duration:.1f}s) in {elapsed:.1f}s (RTF: {rtf:.1f}x)")
+    duration_s = 0
     
     # Convert to opus if requested
     if req.format == "opus":
@@ -155,33 +152,43 @@ def generate(req: GenerateRequest):
         media_type=media_type,
         headers={
             "X-Generation-Time": f"{elapsed:.2f}",
-            "X-Audio-Duration": f"{duration:.2f}",
-            "X-RTF": f"{rtf:.1f}"
+            "X-Audio-Duration": f"{duration_s:.2f}"
         }
     )
 
 
-def generate_api(model, text: str, ref_audio, ref_text) -> bytes:
+def generate_api(runtime, text: str, prompt_audio: str = None, prompt_text: str = None) -> bytes:
     """Generate using dots.tts Python API."""
     import torch
+    import soundfile as sf
+    import tempfile
     
-    kwargs = {"text": text}
-    if ref_audio:
-        kwargs["prompt_audio"] = str(ref_audio)
-        if ref_text:
-            kwargs["prompt_text"] = ref_text
+    kwargs = {
+        "text": text,
+        "num_steps": 10,
+        "language": "fr",
+    }
+    if prompt_audio:
+        kwargs["prompt_audio_path"] = prompt_audio
+        if prompt_text:
+            kwargs["prompt_text"] = prompt_text
     
     with torch.no_grad():
-        output = model.generate(**kwargs)
+        result = runtime.generate(**kwargs)
     
     # Convert to WAV bytes
-    import torchaudio
-    buffer = io.BytesIO()
-    torchaudio.save(buffer, output.cpu(), 48000, format="wav")
-    return buffer.getvalue()
+    audio = result["audio"].float().cpu().squeeze().numpy()
+    sample_rate = result["sample_rate"]
+    
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        sf.write(tmp.name, audio, sample_rate)
+        wav_bytes = Path(tmp.name).read_bytes()
+        Path(tmp.name).unlink()
+    
+    return wav_bytes
 
 
-def generate_cli(text: str, ref_audio, ref_text) -> bytes:
+def generate_cli(text: str, prompt_audio: str = None, prompt_text: str = None) -> bytes:
     """Generate using dots.tts CLI as fallback."""
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         out_path = tmp.name
@@ -192,12 +199,13 @@ def generate_cli(text: str, ref_audio, ref_text) -> bytes:
         "--text", text,
         "--output", out_path,
         "--num-steps", "10",
+        "--precision", "float16",
     ]
     
-    if ref_audio:
-        cmd += ["--prompt-audio", str(ref_audio)]
-        if ref_text:
-            cmd += ["--prompt-text", ref_text]
+    if prompt_audio:
+        cmd += ["--prompt-audio", prompt_audio]
+        if prompt_text:
+            cmd += ["--prompt-text", prompt_text]
     
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if result.returncode != 0:

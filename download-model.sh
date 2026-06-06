@@ -10,7 +10,7 @@ echo "📥 Downloading dots.tts MeanFlow-distilled model..."
 python3 -c "
 from huggingface_hub import snapshot_download
 snapshot_download(
-    'rednote-hilab/dots-tts-meanflow-distilled',
+    'rednote-hilab/dots.tts-soar',
     local_dir='$MODEL_DIR',
     local_dir_use_symlinks=False
 )

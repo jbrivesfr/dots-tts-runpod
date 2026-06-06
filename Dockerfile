@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install FastAPI server deps (for RunPod Load Balancer endpoint)
-RUN pip install --no-cache-dir fastapi uvicorn
+RUN pip install --no-cache-dir fastapi uvicorn soundfile
 
 # Clone and install dots.tts
 RUN git clone https://github.com/rednote-hilab/dots.tts.git /app/dots-tts
