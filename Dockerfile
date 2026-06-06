@@ -29,6 +29,7 @@ RUN pip3 install --no-cache-dir runpod soundfile
 # Clone dots.tts and install deps
 RUN git clone https://github.com/rednote-hilab/dots.tts.git /app/dots-tts
 RUN pip3 install --no-cache-dir -r /app/dots-tts/constraints/recommended.txt
+RUN pip3 install --no-cache-dir loguru
 # Symlink dots_tts into site-packages (pip install broken for this package)
 RUN ln -s /app/dots-tts/src/dots_tts /usr/local/lib/python3.10/dist-packages/dots_tts
 
