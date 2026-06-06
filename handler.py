@@ -123,8 +123,10 @@ def generate_audio(text: str, voice: str = "default", steps: int = 10) -> bytes:
     }
     if prompt_audio:
         gen_kwargs["prompt_audio_path"] = prompt_audio
+        gen_kwargs["speaker_scale"] = 2.0  # stronger voice cloning
         if prompt_text:
             gen_kwargs["prompt_text"] = prompt_text
+        logger.info(f"Voice cloning: {voice} (speaker_scale=2.0)")
     
     with torch.no_grad():
         result = runtime.generate(**gen_kwargs)
