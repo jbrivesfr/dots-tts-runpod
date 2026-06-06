@@ -25,6 +25,9 @@ logger = logging.getLogger("dots-tts-worker")
 # ── Config ──────────────────────────────────────────
 MODEL_DIR = Path(os.environ.get("MODEL_DIR", "/app/model"))
 VOICES_DIR = Path(os.environ.get("VOICES_DIR", "/app/voices"))
+FTP_HOST = os.environ.get("FTP_HOST", "lefasting.fr")
+FTP_USER = os.environ.get("FTP_USER", "")
+FTP_PASS = os.environ.get("FTP_PASS", "")
 
 # Check model status
 MODEL_READY = len(list(MODEL_DIR.glob("*.safetensors"))) > 0 or \
@@ -33,6 +36,36 @@ MODEL_READY = len(list(MODEL_DIR.glob("*.safetensors"))) > 0 or \
 # Model cache (persists across warm requests)
 _model = None
 _model_info = None
+
+def ensure_voice(voice: str):
+    """Download voice sample from FTP if not already cached."""
+    wav_path = VOICES_DIR / f"{voice}.wav"
+    txt_path = VOICES_DIR / f"{voice}.txt"
+    
+    if wav_path.exists() and txt_path.exists():
+        return
+    
+    if not FTP_USER or not FTP_PASS:
+        logger.warning(f"No FTP creds configured — voice cloning unavailable for '{voice}'")
+        return
+    
+    logger.info(f"Downloading voice '{voice}' from FTP...")
+    import subprocess
+    ftp_base = f"ftp://{FTP_USER}:{FTP_PASS}@{FTP_HOST}"
+    try:
+        subprocess.run([
+            "curl", "-sS", f"{ftp_base}/{voice}-voice.wav",
+            "-o", str(wav_path)
+        ], check=True, timeout=30)
+        subprocess.run([
+            "curl", "-sS", f"{ftp_base}/{voice}-voice.txt",
+            "-o", str(txt_path)
+        ], check=True, timeout=10)
+        logger.info(f"Voice '{voice}' downloaded ({wav_path.stat().st_size} bytes)")
+    except Exception as e:
+        logger.error(f"Failed to download voice '{voice}': {e}")
+        wav_path.unlink(missing_ok=True)
+        txt_path.unlink(missing_ok=True)
 
 def load_model():
     """Lazy-load dots.tts runtime. Cached between requests."""
@@ -78,6 +111,7 @@ def generate_audio(text: str, voice: str = "default", steps: int = 10) -> bytes:
     prompt_text = None
     
     if voice != "default":
+        ensure_voice(voice)
         ref_path = VOICES_DIR / f"{voice}.wav"
         ref_txt = VOICES_DIR / f"{voice}.txt"
         if ref_path.exists():

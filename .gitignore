@@ -14,3 +14,4 @@ __pycache__/
 
 # Docker
 *.tar
+.endpoint-id

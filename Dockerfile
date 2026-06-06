@@ -65,11 +65,8 @@ COPY download-model.sh /app/download-model.sh
 # Download model during build
 RUN bash /app/download-model.sh || echo "⚠️ Model will download on first request"
 
-# Voices (downloaded from private FTP during build, not in git)
-RUN mkdir -p /app/voices && \
-    curl -sS "ftp://bigbclub:y6ydnhu6@lefasting.fr/jb-voice.wav" -o /app/voices/jb.wav && \
-    curl -sS "ftp://bigbclub:y6ydnhu6@lefasting.fr/jb-voice.txt" -o /app/voices/jb.txt && \
-    echo "Voices downloaded: $(ls /app/voices/)"
+# Voices (empty at build, downloaded at runtime from FTP via env vars)
+RUN mkdir -p /app/voices
 
 WORKDIR /app
 ENV MODEL_DIR=/app/model
