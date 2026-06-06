@@ -29,7 +29,8 @@ RUN pip3 install --no-cache-dir runpod soundfile
 # Clone dots.tts and install deps
 RUN git clone https://github.com/rednote-hilab/dots.tts.git /app/dots-tts
 RUN pip3 install --no-cache-dir -r /app/dots-tts/constraints/recommended.txt
-ENV PYTHONPATH="/app/dots-tts/src:${PYTHONPATH}"
+# Symlink dots_tts into site-packages (pip install broken for this package)
+RUN ln -s /app/dots-tts/src/dots_tts /usr/local/lib/python3.10/dist-packages/dots_tts
 
 # Verify transformers version
 RUN python3 -c "import transformers; print(f'✅ transformers=={transformers.__version__}')"
