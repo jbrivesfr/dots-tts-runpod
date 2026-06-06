@@ -35,7 +35,7 @@ _model = None
 _model_info = None
 
 def load_model():
-    """Lazy-load dots.tts model. Cached between requests."""
+    """Lazy-load dots.tts runtime. Cached between requests."""
     global _model, _model_info
     
     if _model is not None:
@@ -45,20 +45,18 @@ def load_model():
     start = time.time()
     
     try:
-        from dots_tts import DotsTTS
-        _model = DotsTTS.from_pretrained(
+        from dots_tts.runtime import DotsTtsRuntime
+        _model = DotsTtsRuntime.from_pretrained(
             str(MODEL_DIR),
-            device="cuda",
-            torch_dtype="float16"
+            precision="float16",
         )
     except Exception as e:
         # Fallback: try downloading from HF
         logger.warning(f"Local model load failed ({e}), downloading from HuggingFace...")
-        from dots_tts import DotsTTS
-        _model = DotsTTS.from_pretrained(
-            "rednote-hilab/dots-tts-meanflow-distilled",
-            device="cuda",
-            torch_dtype="float16"
+        from dots_tts.runtime import DotsTtsRuntime
+        _model = DotsTtsRuntime.from_pretrained(
+            "rednote-hilab/dots.tts-soar",
+            precision="float16",
         )
     
     elapsed = time.time() - start
@@ -70,9 +68,10 @@ def load_model():
 def generate_audio(text: str, voice: str = "default", steps: int = 10) -> bytes:
     """Generate speech audio using dots.tts."""
     import torch
-    import torchaudio
+    import soundfile as sf
+    import tempfile
     
-    model = load_model()
+    runtime = load_model()
     
     # Prepare reference audio for voice cloning
     prompt_audio = None
@@ -93,19 +92,26 @@ def generate_audio(text: str, voice: str = "default", steps: int = 10) -> bytes:
     gen_kwargs = {
         "text": text,
         "num_steps": steps,
+        "language": "fr",
     }
     if prompt_audio:
-        gen_kwargs["prompt_audio"] = prompt_audio
+        gen_kwargs["prompt_audio_path"] = prompt_audio
         if prompt_text:
             gen_kwargs["prompt_text"] = prompt_text
     
     with torch.no_grad():
-        output = model.generate(**gen_kwargs)
+        result = runtime.generate(**gen_kwargs)
     
     # Convert to WAV bytes
-    buffer = io.BytesIO()
-    torchaudio.save(buffer, output.cpu(), 48000, format="wav")
-    return buffer.getvalue()
+    audio = result["audio"].float().cpu().squeeze().numpy()
+    sample_rate = result["sample_rate"]
+    
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        sf.write(tmp.name, audio, sample_rate)
+        wav_bytes = Path(tmp.name).read_bytes()
+        Path(tmp.name).unlink()
+    
+    return wav_bytes
 
 
 def convert_to_opus(wav_bytes: bytes) -> bytes:
