@@ -83,6 +83,11 @@ class GenerateRequest(BaseModel):
 def health():
     return {"status": "ok", "model_ready": MODEL_READY}
 
+@app.get("/ping")
+def ping():
+    """RunPod LB health check."""
+    return {"status": "ok"}
+
 
 @app.get("/voices")
 def list_voices():
